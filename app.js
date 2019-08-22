@@ -19,34 +19,55 @@ const BN = require('bn.js');
 const { strTo64BN, bn128 } = require('./utils/AltBn128.js');
 const bnZero = new BN('0', 10);
 
-
-// Check Environment variables
-let hasEnv = true;
-if (process.env.INFURA_PROJECT_ID === undefined) {
-  hasEnv = false;
-  console.log('Missing Env variable: INFURA_PROJECT_ID');
-}
-if (process.env.ETH_SK === undefined) {
-  hasEnv = false;
-  console.log('Missing Env variable: ETH_SK');
-}
-if (hasEnv === false) {
-  process.exit(1);
-}
-
-// Get web3
-const customProvider = new HDWalletProvider(
-  [process.env.ETH_SK],
-  `https://ropsten.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
-);
-const web3 = new Web3(customProvider);
-
 // Middlewares
 app.use(bodyParser.json());
 app.use(cors());
 
+let web3;
+let workerAccount;
+
+const setCustomWeb3Instance = function() {
+  web3 = new Web3(process.env.CHAIN_RPC_ENDPOINT);
+};
+
+const setInfuraWeb3Instance = function() {
+  let hasEnv = true;
+  if (process.env.INFURA_PROJECT_ID === undefined) {
+    hasEnv = false;
+    console.log('Missing Env variable: INFURA_PROJECT_ID');
+  }
+  if (process.env.ETH_SK === undefined) {
+    hasEnv = false;
+    console.log('Missing Env variable: ETH_SK');
+  }
+  if (hasEnv === false) {
+    process.exit(1);
+  }
+  const customProvider = new HDWalletProvider(
+    [process.env.ETH_SK],
+    `https://ropsten.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
+  );
+  web3 = new Web3(customProvider);
+};
+
+// Depending on the Env vars passed, set web3 instance
+process.env.CHAIN_RPC_ENDPOINT ? setCustomWeb3Instance() : setInfuraWeb3Instance();
+
+const addWorkerAccountToWeb3Wallet = function() {
+  if (!process.env.WORKER_PRIVATE_KEY) {
+    console.log('Missing Env variable: WORKER_PRIVATE_KEY');
+    process.exit(1);
+  }
+  workerAccount = web3.eth.accounts.privateKeyToAccount(process.env.WORKER_PRIVATE_KEY);
+  web3.eth.accounts.wallet.add(workerAccount);
+};
+
+// add worker account to wallet
+addWorkerAccountToWeb3Wallet();
+
 // Relayer logic
 app.post('/', asyncHandler(async (req, res) => {
+
   // Set timeout (10 mins max)
   req.setTimeout(600000);
 
@@ -79,13 +100,10 @@ app.post('/', asyncHandler(async (req, res) => {
     return;
   }
 
-  const accounts = await web3.eth.getAccounts();
-  const sender = accounts[0];
-
   const drizzleUtils = await createDrizzleUtils({ web3 });
   const heiswapInstance = await drizzleUtils.getContractInstance({ artifact: heiswapArtifact });
 
-  // Make sure sender authorized this tx
+  // Make sure receiver authorized this tx
   const signatureAddress = await web3.eth.personal.ecRecover(message, signedMessage);
 
   if (
@@ -207,11 +225,11 @@ app.post('/', asyncHandler(async (req, res) => {
   }
 
   const tx = {
-    from: sender,
+    from: workerAccount.address,
     to: heiswapInstance._address,
     gas,
     data: dataBytecode,
-    nonce: await web3.eth.getTransactionCount(sender)
+    nonce: await web3.eth.getTransactionCount(workerAccount.address)
   };
 
   // txR has response type of
