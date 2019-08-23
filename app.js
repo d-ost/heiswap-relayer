@@ -85,7 +85,7 @@ const addWorkerAccountToWeb3Wallet = function() {
 addWorkerAccountToWeb3Wallet();
 
 // Relayer logic
-app.post('/', asyncHandler(async (req, res) => {
+app.post(['/', '/relay'], asyncHandler(async (req, res) => {
 
   // Set timeout (10 mins max)
   req.setTimeout(600000);
