@@ -2,6 +2,7 @@
 /* eslint-disable no-console */
 
 const Web3 = require('web3');
+const ethUtils = require('ethereumjs-util');
 const HDWalletProvider = require('truffle-hdwallet-provider');
 const createDrizzleUtils = require('@drizzle-utils/core');
 const heiswapArtifact = require('./contracts/Heiswap.json');
@@ -25,6 +26,21 @@ app.use(cors());
 
 let web3;
 let workerAccount;
+
+const ecrecovery = function (message, sig) {
+  const rsv = ethUtils.fromRpcSig(sig);
+  const pubKey = ethUtils.ecrecover(
+    ethUtils.hashPersonalMessage(
+      Buffer.from(message)
+    ),
+    rsv.v,
+    rsv.r,
+    rsv.s,
+  );
+  const addrBuf = ethUtils.pubToAddress(pubKey);
+  const addr = ethUtils.bufferToHex(addrBuf);
+  return addr;
+};
 
 const setCustomWeb3Instance = function() {
   web3 = new Web3(process.env.CHAIN_RPC_ENDPOINT);
@@ -104,7 +120,7 @@ app.post('/', asyncHandler(async (req, res) => {
   const heiswapInstance = await drizzleUtils.getContractInstance({ artifact: heiswapArtifact });
 
   // Make sure receiver authorized this tx
-  const signatureAddress = await web3.eth.personal.ecRecover(message, signedMessage);
+  const signatureAddress = ecrecovery(message, signedMessage);
 
   if (
     signatureAddress.toLowerCase() !== receiver.toLowerCase()
