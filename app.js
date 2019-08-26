@@ -70,8 +70,6 @@ const setInfuraWeb3Instance = function() {
 process.env.CHAIN_RPC_ENDPOINT ? setCustomWeb3Instance() : setInfuraWeb3Instance();
 const heiswapAddress = process.env.HEISWAP_ADDRESS;
 
-console.log('heiswapAddress  ', heiswapAddress);
-
 const addWorkerAccountToWeb3Wallet = function() {
   if (!process.env.WORKER_PRIVATE_KEY) {
     console.log('Missing Env variable: WORKER_PRIVATE_KEY');
@@ -278,13 +276,13 @@ app.post(['/', '/relay'], asyncHandler(async (req, res) => {
         txHash: txR.transactionHash
       });
   } catch (e) {
-    const txR = JSON.parse(e.message.split(':').slice(1).join(':'));
-
+    console.log('error  ', e);
+    console.log('error message ', e.message);
     res
       .status(200)
       .send({
-        errorMessage: e.message.split(':').slice(0, 1),
-        txHash: txR.transactionHash
+        errorMessage: e.message,
+        txHash: ''
       });
   }
   console.log('Tx sent...');
