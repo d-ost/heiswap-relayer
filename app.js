@@ -13,7 +13,7 @@ const cors = require('cors');
 const asyncHandler = require('express-async-handler');
 const bodyParser = require('body-parser');
 const app = express();
-const port = 3000;
+const port = 6363;
 
 // ECC
 const BN = require('bn.js');
@@ -68,6 +68,7 @@ const setInfuraWeb3Instance = function() {
 
 // Depending on the Env vars passed, set web3 instance
 process.env.CHAIN_RPC_ENDPOINT ? setCustomWeb3Instance() : setInfuraWeb3Instance();
+const heiswapAddress = process.env.HEISWAP_ADDRESS;
 
 const addWorkerAccountToWeb3Wallet = function() {
   if (!process.env.WORKER_PRIVATE_KEY) {
@@ -82,7 +83,7 @@ const addWorkerAccountToWeb3Wallet = function() {
 addWorkerAccountToWeb3Wallet();
 
 // Relayer logic
-app.post('/', asyncHandler(async (req, res) => {
+app.post(['/', '/relay'], asyncHandler(async (req, res) => {
 
   // Set timeout (10 mins max)
   req.setTimeout(600000);
@@ -116,9 +117,10 @@ app.post('/', asyncHandler(async (req, res) => {
     return;
   }
 
-  const drizzleUtils = await createDrizzleUtils({ web3 });
-  const heiswapInstance = await drizzleUtils.getContractInstance({ artifact: heiswapArtifact });
+  // const drizzleUtils = await createDrizzleUtils({ web3 });
+  // const heiswapInstance = await drizzleUtils.getContractInstance({ artifact: heiswapArtifact });
 
+  const heiswapInstance = new web3.eth.Contract(heiswapArtifact.abi, heiswapAddress);
   // Make sure receiver authorized this tx
   const signatureAddress = ecrecovery(message, signedMessage);
 
@@ -227,7 +229,7 @@ app.post('/', asyncHandler(async (req, res) => {
     // If estimating the gas throws an error
     // then likely invalid params (i.e. ringIdx is closed or user deposited or keys not valid)
     gas = await web3.eth.estimateGas({
-      to: heiswapInstance._address,
+      to: heiswapAddress,
       data: dataBytecode
     });
   } catch (e) {
@@ -242,7 +244,7 @@ app.post('/', asyncHandler(async (req, res) => {
 
   const tx = {
     from: workerAccount.address,
-    to: heiswapInstance._address,
+    to: heiswapAddress,
     gas,
     data: dataBytecode,
     nonce: await web3.eth.getTransactionCount(workerAccount.address)
@@ -274,13 +276,13 @@ app.post('/', asyncHandler(async (req, res) => {
         txHash: txR.transactionHash
       });
   } catch (e) {
-    const txR = JSON.parse(e.message.split(':').slice(1).join(':'));
-
+    console.log('error  ', e);
+    console.log('error message ', e.message);
     res
       .status(200)
       .send({
-        errorMessage: e.message.split(':').slice(0, 1),
-        txHash: txR.transactionHash
+        errorMessage: e.message,
+        txHash: ''
       });
   }
   console.log('Tx sent...');
